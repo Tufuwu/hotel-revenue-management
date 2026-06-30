@@ -1,0 +1,17 @@
+[project]
+name = "hotel-revenue-management"
+version = "0.1.0"
+description = "A rule-based hotel dynamic pricing MVP"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.111.0",
+    "pydantic>=2.7.0",
+    "SQLAlchemy>=2.0.0",
+    "streamlit>=1.36.0",
+    "uvicorn[standard]>=0.30.0",
+    "pytest>=8.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
