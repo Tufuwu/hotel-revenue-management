@@ -8,6 +8,7 @@ dependencies = [
     "fastapi>=0.111.0",
     "pydantic>=2.7.0",
     "SQLAlchemy>=2.0.0",
+    "aiosqlite>=0.20.0",
     "streamlit>=1.36.0",
     "uvicorn[standard]>=0.30.0",
     "pytest>=8.0.0",

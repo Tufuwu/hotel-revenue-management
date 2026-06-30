@@ -1,15 +1,15 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.feedback import create_pricing_feedback
 from app.schemas import PricingFeedbackResponse, SimulatePricingCycleResponse
 from app.services.recommendations import predict_hotel_price
 
 
-def simulate_pricing_cycle(
-    db: Session,
+async def simulate_pricing_cycle(
+    db: AsyncSession,
     hotel_id: int,
 ) -> SimulatePricingCycleResponse | None:
-    prediction = predict_hotel_price(db, hotel_id)
+    prediction = await predict_hotel_price(db, hotel_id)
     if prediction is None:
         return None
 
@@ -18,7 +18,7 @@ def simulate_pricing_cycle(
         prediction.recommended_price * simulated_occupancy,
         2,
     )
-    feedback = create_pricing_feedback(
+    feedback = await create_pricing_feedback(
         db,
         recommendation_id=prediction.recommendation_id,
         executed_price=prediction.recommended_price,

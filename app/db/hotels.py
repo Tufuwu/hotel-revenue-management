@@ -1,13 +1,14 @@
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.db.model import CompetitorHotel, Hotel
 from app.db.serializers import get_latest_snapshot
 
 
-def list_hotels(session: Session) -> list[dict]:
+async def list_hotels(session: AsyncSession) -> list[dict]:
     """List hotel records with only the fields needed by service workflows."""
-    hotels = session.scalars(select(Hotel).order_by(Hotel.id)).all()
+    hotels = (await session.scalars(select(Hotel).order_by(Hotel.id))).all()
     return [
         {
             "id": hotel.id,
@@ -21,9 +22,9 @@ def list_hotels(session: Session) -> list[dict]:
     ]
 
 
-def get_hotel_pricing_input(session: Session, hotel_id: int) -> dict | None:
+async def get_hotel_pricing_input(session: AsyncSession, hotel_id: int) -> dict | None:
     """Load all inputs needed to price a hotel in a single query workflow."""
-    hotel = session.scalar(
+    hotel = await session.scalar(
         select(Hotel)
         .options(
             selectinload(Hotel.competitor_hotels).selectinload(

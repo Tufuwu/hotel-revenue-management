@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.constraints import update_pricing_constraint
 from app.db.hotels import get_hotel_pricing_input, list_hotels
@@ -15,36 +15,36 @@ from app.schemas import (
 )
 
 
-def get_hotel_pricing_inputs(db: Session) -> list[HotelPricingInput]:
+async def get_hotel_pricing_inputs(db: AsyncSession) -> list[HotelPricingInput]:
     """Return pricing-ready inputs for every configured hotel."""
     hotels = []
-    for hotel in list_hotels(db):
-        pricing_input = get_hotel_pricing_input(db, hotel["id"])
+    for hotel in await list_hotels(db):
+        pricing_input = await get_hotel_pricing_input(db, hotel["id"])
         if pricing_input is not None:
             hotels.append(HotelPricingInput(**pricing_input))
     return hotels
 
 
-def get_hotel_daily_metrics(
-    db: Session,
+async def get_hotel_daily_metrics(
+    db: AsyncSession,
     hotel_id: int,
 ) -> list[DailyMetricResponse] | None:
     """Return daily performance metrics after validating the hotel exists."""
-    if get_hotel_pricing_input(db, hotel_id) is None:
+    if await get_hotel_pricing_input(db, hotel_id) is None:
         return None
     return [
         DailyMetricResponse(**metric)
-        for metric in list_daily_metrics(db, hotel_id)
+        for metric in await list_daily_metrics(db, hotel_id)
     ]
 
 
-def record_hotel_daily_metric(
-    db: Session,
+async def record_hotel_daily_metric(
+    db: AsyncSession,
     hotel_id: int,
     payload: DailyMetricRequest,
 ) -> DailyMetricResponse | None:
     """Create or update one daily operating metric for a hotel."""
-    metric = upsert_daily_metric(
+    metric = await upsert_daily_metric(
         db,
         hotel_id=hotel_id,
         metric_date=payload.metric_date,
@@ -58,13 +58,13 @@ def record_hotel_daily_metric(
     return DailyMetricResponse(**metric)
 
 
-def revise_pricing_constraint(
-    db: Session,
+async def revise_pricing_constraint(
+    db: AsyncSession,
     hotel_id: int,
     payload: PricingConstraintRequest,
 ) -> PricingConstraintResponse | None:
     """Update floor and ceiling prices used to bound recommendations."""
-    pricing_input = get_hotel_pricing_input(db, hotel_id)
+    pricing_input = await get_hotel_pricing_input(db, hotel_id)
     if pricing_input is None:
         return None
 
@@ -81,7 +81,7 @@ def revise_pricing_constraint(
     if max_price is not None and max_price < min_price:
         raise ValueError("max_price must be greater than or equal to min_price")
 
-    constraint = update_pricing_constraint(
+    constraint = await update_pricing_constraint(
         db,
         hotel_id=hotel_id,
         min_price=payload.min_price,

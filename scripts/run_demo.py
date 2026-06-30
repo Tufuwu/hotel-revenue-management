@@ -1,4 +1,5 @@
 import argparse
+import asyncio
 import os
 import signal
 import subprocess
@@ -54,7 +55,7 @@ def stop_process_tree(process: subprocess.Popen, force: bool = False) -> None:
         process.terminate()
 
 
-def main() -> None:
+async def main() -> None:
     parser = argparse.ArgumentParser(description="Run the hotel pricing demo.")
     parser.add_argument(
         "--reset-db",
@@ -69,11 +70,11 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.reset_db:
-        reset_db()
+        await reset_db()
         print("Reset SQLite demo database.")
     else:
         # init_db is non-destructive: it creates tables and seeds only if empty.
-        init_db()
+        await init_db()
         print("Initialized SQLite demo database.")
 
     # Start API and dashboard as sibling processes under this launcher.
@@ -137,4 +138,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

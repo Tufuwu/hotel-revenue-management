@@ -1,14 +1,14 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.feedback import create_pricing_feedback
 from app.schemas import PricingFeedbackRequest, PricingFeedbackResponse
 
 
-def record_pricing_feedback(
-    db: Session,
+async def record_pricing_feedback(
+    db: AsyncSession,
     payload: PricingFeedbackRequest,
 ) -> PricingFeedbackResponse | None:
-    feedback = create_pricing_feedback(
+    feedback = await create_pricing_feedback(
         db,
         recommendation_id=payload.recommendation_id,
         executed_price=payload.executed_price,

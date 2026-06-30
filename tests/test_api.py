@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -7,10 +9,10 @@ from app.main import app
 
 @pytest.fixture()
 def client():
-    reset_db()
+    asyncio.run(reset_db())
     with TestClient(app) as test_client:
         yield test_client
-    reset_db()
+    asyncio.run(reset_db())
 
 
 def test_health_check(client):

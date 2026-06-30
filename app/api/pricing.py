@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.schemas import (
@@ -17,11 +17,11 @@ router = APIRouter()
 
 
 @router.post("/predict-price", response_model=PricePredictionResponse)
-def predict_price(
+async def predict_price(
     payload: PricePredictionRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ) -> PricePredictionResponse:
-    prediction = predict_hotel_price(db, payload.hotel_id)
+    prediction = await predict_hotel_price(db, payload.hotel_id)
     if prediction is None:
         raise HTTPException(status_code=404, detail="hotel not found")
     return prediction
@@ -31,11 +31,11 @@ def predict_price(
     "/hotels/{hotel_id}/recommendations",
     response_model=list[PricingRecommendationResponse],
 )
-def get_recommendations(
+async def get_recommendations(
     hotel_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ) -> list[PricingRecommendationResponse]:
-    recommendations = get_hotel_recommendations(db, hotel_id)
+    recommendations = await get_hotel_recommendations(db, hotel_id)
     if recommendations is None:
         raise HTTPException(status_code=404, detail="hotel not found")
     return recommendations

@@ -6,7 +6,7 @@ router = APIRouter()
 
 
 @router.get("/", response_class=HTMLResponse)
-def api_home() -> str:
+async def api_home() -> str:
     return """
     <!doctype html>
     <html lang="zh-CN">
@@ -99,5 +99,5 @@ def api_home() -> str:
 
 
 @router.get("/health")
-def health_check() -> dict[str, str]:
+async def health_check() -> dict[str, str]:
     return {"status": "ok"}

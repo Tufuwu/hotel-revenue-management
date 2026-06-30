@@ -1,4 +1,5 @@
 import argparse
+import asyncio
 import sys
 from pathlib import Path
 
@@ -12,7 +13,7 @@ from app.db.lifecycle import init_db, reset_db
 from app.db.session import DB_PATH, SessionLocal
 
 
-def main() -> None:
+async def main() -> None:
     parser = argparse.ArgumentParser(description="Initialize the demo SQLite database.")
     parser.add_argument(
         "--reset",
@@ -22,14 +23,14 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.reset:
-        reset_db()
+        await reset_db()
         action = "Reset"
     else:
-        init_db()
+        await init_db()
         action = "Initialized"
 
-    with SessionLocal() as db:
-        hotels = list_hotels(db)
+    async with SessionLocal() as db:
+        hotels = await list_hotels(db)
     print(f"{action} database: {DB_PATH}")
     print(f"Hotel rows: {len(hotels)}")
     for hotel in hotels:
@@ -40,4 +41,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

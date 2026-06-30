@@ -1,7 +1,8 @@
 from datetime import date
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.db.model import CompetitorHotel, CompetitorRateSnapshot, Hotel
 from app.db.serializers import (
@@ -10,11 +11,11 @@ from app.db.serializers import (
 )
 
 
-def list_competitor_hotels(session: Session, hotel_id: int) -> list[dict] | None:
-    if session.get(Hotel, hotel_id) is None:
+async def list_competitor_hotels(session: AsyncSession, hotel_id: int) -> list[dict] | None:
+    if await session.get(Hotel, hotel_id) is None:
         return None
 
-    competitors = session.scalars(
+    competitors = (await session.scalars(
         select(CompetitorHotel)
         .options(selectinload(CompetitorHotel.rate_snapshots))
         .where(
@@ -22,12 +23,12 @@ def list_competitor_hotels(session: Session, hotel_id: int) -> list[dict] | None
             CompetitorHotel.distance_km <= 5,
         )
         .order_by(CompetitorHotel.distance_km)
-    ).all()
+    )).all()
     return [competitor_hotel_to_dict(competitor) for competitor in competitors]
 
 
-def create_competitor_hotel(
-    session: Session,
+async def create_competitor_hotel(
+    session: AsyncSession,
     hotel_id: int,
     name: str,
     room_type: str,
@@ -35,7 +36,7 @@ def create_competitor_hotel(
     longitude: float,
     distance_km: float,
 ) -> dict | None:
-    if session.get(Hotel, hotel_id) is None:
+    if await session.get(Hotel, hotel_id) is None:
         return None
 
     competitor = CompetitorHotel(
@@ -47,19 +48,29 @@ def create_competitor_hotel(
         distance_km=distance_km,
     )
     session.add(competitor)
-    session.commit()
-    session.refresh(competitor)
-    return competitor_hotel_to_dict(competitor)
+    await session.commit()
+    await session.refresh(competitor)
+    return {
+        "id": competitor.id,
+        "hotel_id": competitor.hotel_id,
+        "name": competitor.name,
+        "room_type": competitor.room_type,
+        "latitude": competitor.latitude,
+        "longitude": competitor.longitude,
+        "distance_km": competitor.distance_km,
+        "latest_price": None,
+        "latest_stay_date": None,
+    }
 
 
-def create_competitor_rate_snapshot(
-    session: Session,
+async def create_competitor_rate_snapshot(
+    session: AsyncSession,
     competitor_hotel_id: int,
     stay_date: date,
     price: float,
     source: str | None = None,
 ) -> dict | None:
-    competitor = session.get(CompetitorHotel, competitor_hotel_id)
+    competitor = await session.get(CompetitorHotel, competitor_hotel_id)
     if competitor is None:
         return None
 
@@ -70,6 +81,6 @@ def create_competitor_rate_snapshot(
         source=source,
     )
     session.add(snapshot)
-    session.commit()
-    session.refresh(snapshot)
+    await session.commit()
+    await session.refresh(snapshot)
     return competitor_rate_snapshot_to_dict(snapshot)

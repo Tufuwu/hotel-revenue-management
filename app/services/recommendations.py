@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.pricing import compute_comp_index, compute_demand_score, recommend_price
 from app.db.feedback import list_pricing_feedback_for_hotel
@@ -18,9 +18,12 @@ from app.services.learning import (
 )
 
 
-def predict_hotel_price(db: Session, hotel_id: int) -> PricePredictionResponse | None:
+async def predict_hotel_price(
+    db: AsyncSession,
+    hotel_id: int,
+) -> PricePredictionResponse | None:
     """Build, persist, and return a pricing recommendation for one hotel."""
-    pricing_input = get_hotel_pricing_input(db, hotel_id)
+    pricing_input = await get_hotel_pricing_input(db, hotel_id)
     if pricing_input is None:
         return None
 
@@ -42,7 +45,7 @@ def predict_hotel_price(db: Session, hotel_id: int) -> PricePredictionResponse |
     )
 
     # Recent execution feedback nudges the rule price without crossing bounds.
-    feedback_history = list_pricing_feedback_for_hotel(db, hotel.hotel_id)
+    feedback_history = await list_pricing_feedback_for_hotel(db, hotel.hotel_id)
     learning_adjustment_factor = compute_learning_adjustment(feedback_history)
     recommended_price = apply_learning_adjustment(
         rule_price,
@@ -63,7 +66,7 @@ def predict_hotel_price(db: Session, hotel_id: int) -> PricePredictionResponse |
     )
 
     # Persist the generated recommendation so later feedback can learn from it.
-    recommendation = create_pricing_recommendation(
+    recommendation = await create_pricing_recommendation(
         db,
         hotel_id=hotel.hotel_id,
         recommended_price=round(recommended_price, 2),
@@ -93,16 +96,16 @@ def predict_hotel_price(db: Session, hotel_id: int) -> PricePredictionResponse |
     )
 
 
-def get_hotel_recommendations(
-    db: Session,
+async def get_hotel_recommendations(
+    db: AsyncSession,
     hotel_id: int,
 ) -> list[PricingRecommendationResponse] | None:
     """Return saved recommendation history after confirming the hotel exists."""
-    if get_hotel_pricing_input(db, hotel_id) is None:
+    if await get_hotel_pricing_input(db, hotel_id) is None:
         return None
     return [
         PricingRecommendationResponse(**recommendation)
-        for recommendation in list_pricing_recommendations(db, hotel_id)
+        for recommendation in await list_pricing_recommendations(db, hotel_id)
     ]
 
 

@@ -1,17 +1,19 @@
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.db.model import PricingFeedback, PricingRecommendation
 from app.db.serializers import feedback_to_dict
 
 
-def list_pricing_feedback_for_hotel(session: Session, hotel_id: int) -> list[dict]:
-    feedback_rows = session.scalars(
+async def list_pricing_feedback_for_hotel(session: AsyncSession, hotel_id: int) -> list[dict]:
+    feedback_rows = (await session.scalars(
         select(PricingFeedback)
+        .options(selectinload(PricingFeedback.recommendation))
         .join(PricingRecommendation)
         .where(PricingRecommendation.hotel_id == hotel_id)
         .order_by(PricingFeedback.created_at.desc())
-    ).all()
+    )).all()
     return [
         {
             **feedback_to_dict(feedback),
@@ -21,19 +23,19 @@ def list_pricing_feedback_for_hotel(session: Session, hotel_id: int) -> list[dic
     ]
 
 
-def create_pricing_feedback(
-    session: Session,
+async def create_pricing_feedback(
+    session: AsyncSession,
     recommendation_id: int,
     executed_price: float,
     actual_occupancy: float,
     actual_revenue: float,
     feedback_note: str | None = None,
 ) -> dict | None:
-    recommendation = session.get(PricingRecommendation, recommendation_id)
+    recommendation = await session.get(PricingRecommendation, recommendation_id)
     if recommendation is None:
         return None
 
-    feedback = session.scalar(
+    feedback = await session.scalar(
         select(PricingFeedback).where(
             PricingFeedback.recommendation_id == recommendation_id
         )
@@ -46,6 +48,6 @@ def create_pricing_feedback(
     feedback.actual_occupancy = actual_occupancy
     feedback.actual_revenue = actual_revenue
     feedback.feedback_note = feedback_note
-    session.commit()
-    session.refresh(feedback)
+    await session.commit()
+    await session.refresh(feedback)
     return feedback_to_dict(feedback)

@@ -1,12 +1,12 @@
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.model import PricingRecommendation
 from app.db.serializers import recommendation_to_dict
 
 
-def create_pricing_recommendation(
-    session: Session,
+async def create_pricing_recommendation(
+    session: AsyncSession,
     hotel_id: int,
     recommended_price: float,
     comp_index: float,
@@ -21,17 +21,17 @@ def create_pricing_recommendation(
         reason=reason,
     )
     session.add(recommendation)
-    session.commit()
-    session.refresh(recommendation)
+    await session.commit()
+    await session.refresh(recommendation)
     return recommendation_to_dict(recommendation)
 
 
-def list_pricing_recommendations(session: Session, hotel_id: int) -> list[dict]:
-    recommendations = session.scalars(
+async def list_pricing_recommendations(session: AsyncSession, hotel_id: int) -> list[dict]:
+    recommendations = (await session.scalars(
         select(PricingRecommendation)
         .where(PricingRecommendation.hotel_id == hotel_id)
         .order_by(PricingRecommendation.created_at.desc())
-    ).all()
+    )).all()
     return [
         recommendation_to_dict(recommendation)
         for recommendation in recommendations

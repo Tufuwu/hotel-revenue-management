@@ -1,6 +1,6 @@
 from math import asin, cos, radians, sin, sqrt
 
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.competitors import (
     create_competitor_hotel,
@@ -16,24 +16,24 @@ from app.schemas import (
 )
 
 
-def get_hotel_competitors(
-    db: Session,
+async def get_hotel_competitors(
+    db: AsyncSession,
     hotel_id: int,
 ) -> list[CompetitorHotelResponse] | None:
     """Return competitors for a hotel, or None when the hotel is unknown."""
-    competitors = list_competitor_hotels(db, hotel_id)
+    competitors = await list_competitor_hotels(db, hotel_id)
     if competitors is None:
         return None
     return [CompetitorHotelResponse(**competitor) for competitor in competitors]
 
 
-def register_competitor_hotel(
-    db: Session,
+async def register_competitor_hotel(
+    db: AsyncSession,
     hotel_id: int,
     payload: CompetitorHotelRequest,
 ) -> CompetitorHotelResponse | None:
     """Register a nearby competitor that is relevant to local pricing."""
-    pricing_input = get_hotel_pricing_input(db, hotel_id)
+    pricing_input = await get_hotel_pricing_input(db, hotel_id)
     if pricing_input is None:
         return None
 
@@ -46,7 +46,7 @@ def register_competitor_hotel(
     if distance_km > 5:
         raise ValueError("competitor hotel must be within 5 kilometers")
 
-    competitor = create_competitor_hotel(
+    competitor = await create_competitor_hotel(
         db,
         hotel_id=hotel_id,
         name=payload.name,
@@ -60,13 +60,13 @@ def register_competitor_hotel(
     return CompetitorHotelResponse(**competitor)
 
 
-def record_competitor_rate_snapshot(
-    db: Session,
+async def record_competitor_rate_snapshot(
+    db: AsyncSession,
     competitor_hotel_id: int,
     payload: CompetitorRateSnapshotRequest,
 ) -> CompetitorRateSnapshotResponse | None:
     """Store one observed competitor rate used by future price predictions."""
-    snapshot = create_competitor_rate_snapshot(
+    snapshot = await create_competitor_rate_snapshot(
         db,
         competitor_hotel_id=competitor_hotel_id,
         stay_date=payload.stay_date,

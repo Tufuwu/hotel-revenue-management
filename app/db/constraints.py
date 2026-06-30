@@ -1,17 +1,23 @@
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.db.model import Hotel, PricingConstraint
 
 
-def update_pricing_constraint(
-    session: Session,
+async def update_pricing_constraint(
+    session: AsyncSession,
     hotel_id: int,
     min_price: float | None = None,
     max_price: float | None = None,
     update_min_price: bool = False,
     update_max_price: bool = False,
 ) -> dict | None:
-    hotel = session.get(Hotel, hotel_id)
+    hotel = await session.scalar(
+        select(Hotel)
+        .options(selectinload(Hotel.pricing_constraint))
+        .where(Hotel.id == hotel_id)
+    )
     if hotel is None:
         return None
 
@@ -29,8 +35,8 @@ def update_pricing_constraint(
     if update_max_price:
         constraint.max_price = max_price
 
-    session.commit()
-    session.refresh(constraint)
+    await session.commit()
+    await session.refresh(constraint)
     return {
         "hotel_id": hotel_id,
         "min_price": constraint.min_price,

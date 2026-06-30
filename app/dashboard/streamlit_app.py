@@ -1,4 +1,6 @@
+import asyncio
 from datetime import date
+from typing import Awaitable, TypeVar
 
 import streamlit as st
 
@@ -15,22 +17,59 @@ from app.services.hotels import record_hotel_daily_metric, revise_pricing_constr
 from app.services.learning import apply_learning_adjustment, compute_learning_adjustment
 
 
-st.set_page_config(page_title="酒店动态定价 MVP", layout="wide")
-init_db()
+T = TypeVar("T")
 
-st.title("酒店动态定价 MVP")
 
-db = SessionLocal()
-hotels = list_hotels(db)
+def run_async(awaitable: Awaitable[T]) -> T:
+    return asyncio.run(awaitable)
+
+
+async def load_hotels() -> list[dict]:
+    await init_db()
+    async with SessionLocal() as db:
+        return await list_hotels(db)
+
+
+async def load_dashboard_data(hotel_id: int) -> dict | None:
+    async with SessionLocal() as db:
+        pricing_input = await get_hotel_pricing_input(db, hotel_id)
+        if pricing_input is None:
+            return None
+        return {
+            "pricing_input": pricing_input,
+            "competitors": await list_competitor_hotels(db, hotel_id) or [],
+            "feedback": await list_pricing_feedback_for_hotel(db, hotel_id),
+            "metrics": await list_daily_metrics(db, hotel_id),
+        }
+
+
+async def run_simulation(hotel_id: int):
+    async with SessionLocal() as db:
+        return await simulate_pricing_cycle(db, hotel_id)
+
+
+async def save_daily_metric(hotel_id: int, payload: DailyMetricRequest):
+    async with SessionLocal() as db:
+        return await record_hotel_daily_metric(db, hotel_id, payload)
+
+
+async def save_pricing_constraint(hotel_id: int, payload: PricingConstraintRequest):
+    async with SessionLocal() as db:
+        return await revise_pricing_constraint(db, hotel_id, payload)
+
+
+st.set_page_config(page_title="Hotel Dynamic Pricing MVP", layout="wide")
+st.title("Hotel Dynamic Pricing MVP")
+
+hotels = run_async(load_hotels())
 if not hotels:
-    db.close()
-    st.error("SQLite 中没有酒店数据。")
+    st.error("No hotel data found in SQLite.")
     st.stop()
 
 with st.sidebar:
-    st.header("数据选择")
+    st.header("Data")
     selected_hotel_id = st.selectbox(
-        "酒店 / 房型",
+        "Hotel / room type",
         [hotel["id"] for hotel in hotels],
         format_func=lambda hotel_id: next(
             f"{hotel['id']} - {hotel['room_type']}"
@@ -39,32 +78,33 @@ with st.sidebar:
         ),
     )
 
-pricing_input = get_hotel_pricing_input(db, selected_hotel_id)
-if pricing_input is None:
-    db.close()
-    st.error("SQLite 中没有找到所选酒店。")
+dashboard_data = run_async(load_dashboard_data(selected_hotel_id))
+if dashboard_data is None:
+    st.error("Selected hotel was not found.")
     st.stop()
+
+pricing_input = dashboard_data["pricing_input"]
 
 with st.sidebar:
     st.divider()
-    st.header("演示操作")
-    if st.button("模拟新增调价记录", use_container_width=True):
-        result = simulate_pricing_cycle(db, selected_hotel_id)
+    st.header("Demo")
+    if st.button("Simulate pricing cycle", use_container_width=True):
+        result = run_async(run_simulation(selected_hotel_id))
         if result is None:
-            st.error("模拟失败：未找到酒店。")
+            st.error("Simulation failed: hotel not found.")
         else:
             st.success(
-                f"已生成推荐 #{result.prediction.recommendation_id}，"
-                f"并写入反馈 #{result.feedback.id}。"
+                f"Created recommendation #{result.prediction.recommendation_id} "
+                f"and feedback #{result.feedback.id}."
             )
             st.rerun()
 
     st.divider()
-    st.header("录入每日经营数据")
+    st.header("Daily metric")
     with st.form("daily_metric_form"):
-        metric_date = st.date_input("日期", value=date.today())
+        metric_date = st.date_input("Date", value=date.today())
         occupancy_value = st.number_input(
-            "入住率",
+            "Occupancy",
             min_value=0.0,
             max_value=100.0,
             value=float(pricing_input["occupancy"]),
@@ -77,7 +117,7 @@ with st.sidebar:
             step=10.0,
         )
         revenue_value = st.number_input(
-            "收入",
+            "Revenue",
             min_value=0.0,
             value=round(adr_value * occupancy_value, 2),
             step=100.0,
@@ -88,75 +128,76 @@ with st.sidebar:
             value=round(adr_value * occupancy_value / 100, 2),
             step=10.0,
         )
-        submitted_metric = st.form_submit_button("保存经营数据")
+        submitted_metric = st.form_submit_button("Save metric")
 
     if submitted_metric:
-        metric = record_hotel_daily_metric(
-            db,
-            selected_hotel_id,
-            DailyMetricRequest(
-                metric_date=metric_date,
-                occupancy=occupancy_value,
-                revenue=revenue_value,
-                adr=adr_value,
-                revpar=revpar_value,
-            ),
+        metric = run_async(
+            save_daily_metric(
+                selected_hotel_id,
+                DailyMetricRequest(
+                    metric_date=metric_date,
+                    occupancy=occupancy_value,
+                    revenue=revenue_value,
+                    adr=adr_value,
+                    revpar=revpar_value,
+                ),
+            )
         )
         if metric is None:
-            st.error("保存失败：未找到酒店。")
+            st.error("Save failed: hotel not found.")
         else:
-            st.success("每日经营数据已保存。")
+            st.success("Daily metric saved.")
             st.rerun()
 
     st.divider()
-    st.header("价格约束")
+    st.header("Price bounds")
     with st.form("pricing_constraint_form"):
         min_price_value = st.number_input(
-            "最低价格",
+            "Minimum price",
             min_value=0.01,
             value=float(pricing_input["min_price"]),
             step=10.0,
         )
         use_max_price = st.checkbox(
-            "启用最高价格",
+            "Enable maximum price",
             value=pricing_input["max_price"] is not None,
         )
         max_price_value = st.number_input(
-            "最高价格",
+            "Maximum price",
             min_value=0.01,
             value=float(pricing_input["max_price"] or pricing_input["base_price"] * 1.3),
             step=10.0,
             disabled=not use_max_price,
         )
-        submitted_constraint = st.form_submit_button("保存价格约束")
+        submitted_constraint = st.form_submit_button("Save bounds")
 
     if submitted_constraint:
         try:
-            constraint = revise_pricing_constraint(
-                db,
-                selected_hotel_id,
-                PricingConstraintRequest(
-                    min_price=min_price_value,
-                    max_price=max_price_value if use_max_price else None,
-                ),
+            constraint = run_async(
+                save_pricing_constraint(
+                    selected_hotel_id,
+                    PricingConstraintRequest(
+                        min_price=min_price_value,
+                        max_price=max_price_value if use_max_price else None,
+                    ),
+                )
             )
         except ValueError as error:
             st.error(str(error))
         else:
             if constraint is None:
-                st.error("保存失败：未找到酒店。")
+                st.error("Save failed: hotel not found.")
             else:
-                st.success("价格约束已更新。")
+                st.success("Price bounds saved.")
                 st.rerun()
 
-pricing_input = get_hotel_pricing_input(db, selected_hotel_id)
 base_price = pricing_input["base_price"]
 occupancy = pricing_input["occupancy"]
 competitor_prices = pricing_input["competitor_prices"]
-competitor_hotels = list_competitor_hotels(db, selected_hotel_id) or []
+competitor_hotels = dashboard_data["competitors"]
 min_price = pricing_input["min_price"]
 max_price = pricing_input["max_price"]
-feedback_history = list_pricing_feedback_for_hotel(db, selected_hotel_id)
+feedback_history = dashboard_data["feedback"]
 learning_adjustment_factor = compute_learning_adjustment(feedback_history)
 
 comp_index = compute_comp_index(competitor_prices)
@@ -176,17 +217,17 @@ recommended_price = apply_learning_adjustment(
 )
 
 metric_cols = st.columns(6)
-metric_cols[0].metric("基础价格", f"${base_price:,.2f}")
-metric_cols[1].metric("推荐价格", f"${recommended_price:,.2f}")
-metric_cols[2].metric("竞品均价", f"${comp_index:,.2f}")
-metric_cols[3].metric("需求评分", f"{demand_score:.2f}")
-metric_cols[4].metric("最低价格", f"${min_price:,.2f}")
-metric_cols[5].metric("学习调整", f"{learning_adjustment_factor:.2%}")
+metric_cols[0].metric("Base price", f"${base_price:,.2f}")
+metric_cols[1].metric("Recommended", f"${recommended_price:,.2f}")
+metric_cols[2].metric("Market index", f"${comp_index:,.2f}")
+metric_cols[3].metric("Demand score", f"{demand_score:.2f}")
+metric_cols[4].metric("Minimum", f"${min_price:,.2f}")
+metric_cols[5].metric("Learning", f"{learning_adjustment_factor:.2%}")
 
 chart_col, input_col = st.columns([2, 1])
 
 with chart_col:
-    st.subheader("5 公里内竞品最新价格")
+    st.subheader("Nearby competitor prices")
     st.bar_chart(
         {
             competitor["name"]: competitor["latest_price"]
@@ -196,57 +237,14 @@ with chart_col:
     )
 
 with input_col:
-    st.subheader("当前定价输入")
+    st.subheader("Current pricing input")
     st.json(pricing_input)
 
-st.subheader("周边 5 公里竞品酒店")
-st.dataframe(
-    competitor_hotels,
-    column_config={
-        "id": "竞品 ID",
-        "hotel_id": "本酒店 ID",
-        "name": "竞品酒店",
-        "room_type": "房型",
-        "latitude": "纬度",
-        "longitude": "经度",
-        "distance_km": "距离 km",
-        "latest_price": "最新价格",
-        "latest_stay_date": "入住日期",
-    },
-    use_container_width=True,
-)
+st.subheader("Competitor hotels within 5 km")
+st.dataframe(competitor_hotels, use_container_width=True)
 
-st.subheader("每日经营数据")
-daily_metrics = list_daily_metrics(db, selected_hotel_id)
-st.dataframe(
-    daily_metrics,
-    column_config={
-        "id": "ID",
-        "hotel_id": "酒店 ID",
-        "metric_date": "日期",
-        "occupancy": "入住率",
-        "revenue": "收入",
-        "adr": "平均房价 ADR",
-        "revpar": "每间可售房收入 RevPAR",
-    },
-    use_container_width=True,
-)
+st.subheader("Daily operating metrics")
+st.dataframe(dashboard_data["metrics"], use_container_width=True)
 
-st.subheader("反馈学习样本")
-st.caption("点击“模拟新增调价记录”后，系统会生成推荐记录并写入模拟反馈。")
-st.dataframe(
-    feedback_history,
-    column_config={
-        "id": "反馈 ID",
-        "recommendation_id": "推荐 ID",
-        "executed_price": "实际执行价格",
-        "actual_occupancy": "实际入住率",
-        "actual_revenue": "实际收入",
-        "recommended_price": "原推荐价格",
-        "feedback_note": "备注",
-        "created_at": "反馈时间",
-    },
-    use_container_width=True,
-)
-
-db.close()
+st.subheader("Feedback samples")
+st.dataframe(feedback_history, use_container_width=True)

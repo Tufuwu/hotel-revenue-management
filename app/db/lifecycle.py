@@ -1,7 +1,7 @@
 from datetime import date
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.model import (
     Base,
@@ -15,26 +15,28 @@ from app.db.seed import get_seed_hotels
 from app.db.session import SessionLocal, engine
 
 
-def init_db() -> None:
-    create_tables()
-    with SessionLocal() as session:
-        hotel_count = len(session.scalars(select(Hotel.id)).all())
+async def init_db() -> None:
+    await create_tables()
+    async with SessionLocal() as session:
+        hotel_count = len((await session.scalars(select(Hotel.id))).all())
         if hotel_count == 0:
-            seed_hotels(session)
+            await seed_hotels(session)
 
 
-def reset_db() -> None:
-    Base.metadata.drop_all(bind=engine)
-    create_tables()
-    with SessionLocal() as session:
-        seed_hotels(session)
+async def reset_db() -> None:
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.drop_all)
+    await create_tables()
+    async with SessionLocal() as session:
+        await seed_hotels(session)
 
 
-def create_tables() -> None:
-    Base.metadata.create_all(bind=engine)
+async def create_tables() -> None:
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
 
 
-def seed_hotels(session: Session) -> None:
+async def seed_hotels(session: AsyncSession) -> None:
     for hotel in get_seed_hotels():
         session.add(
             Hotel(
@@ -78,4 +80,4 @@ def seed_hotels(session: Session) -> None:
                 ],
             )
         )
-    session.commit()
+    await session.commit()
