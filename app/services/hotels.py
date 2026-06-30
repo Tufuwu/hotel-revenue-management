@@ -16,6 +16,7 @@ from app.schemas import (
 
 
 def get_hotel_pricing_inputs(db: Session) -> list[HotelPricingInput]:
+    """Return pricing-ready inputs for every configured hotel."""
     hotels = []
     for hotel in list_hotels(db):
         pricing_input = get_hotel_pricing_input(db, hotel["id"])
@@ -28,6 +29,7 @@ def get_hotel_daily_metrics(
     db: Session,
     hotel_id: int,
 ) -> list[DailyMetricResponse] | None:
+    """Return daily performance metrics after validating the hotel exists."""
     if get_hotel_pricing_input(db, hotel_id) is None:
         return None
     return [
@@ -41,6 +43,7 @@ def record_hotel_daily_metric(
     hotel_id: int,
     payload: DailyMetricRequest,
 ) -> DailyMetricResponse | None:
+    """Create or update one daily operating metric for a hotel."""
     metric = upsert_daily_metric(
         db,
         hotel_id=hotel_id,
@@ -60,6 +63,7 @@ def revise_pricing_constraint(
     hotel_id: int,
     payload: PricingConstraintRequest,
 ) -> PricingConstraintResponse | None:
+    """Update floor and ceiling prices used to bound recommendations."""
     pricing_input = get_hotel_pricing_input(db, hotel_id)
     if pricing_input is None:
         return None

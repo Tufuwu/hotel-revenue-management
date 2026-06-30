@@ -19,11 +19,14 @@ from app.services.learning import (
 
 
 def predict_hotel_price(db: Session, hotel_id: int) -> PricePredictionResponse | None:
+    """Build, persist, and return a pricing recommendation for one hotel."""
     pricing_input = get_hotel_pricing_input(db, hotel_id)
     if pricing_input is None:
         return None
 
     hotel = HotelPricingInput(**pricing_input)
+
+    # The rule engine first prices from current market and demand signals.
     comp_index = compute_comp_index(hotel.competitor_prices)
     demand_score = compute_demand_score(
         hotel.base_price,
@@ -37,6 +40,8 @@ def predict_hotel_price(db: Session, hotel_id: int) -> PricePredictionResponse |
         min_price=hotel.min_price,
         max_price=hotel.max_price,
     )
+
+    # Recent execution feedback nudges the rule price without crossing bounds.
     feedback_history = list_pricing_feedback_for_hotel(db, hotel.hotel_id)
     learning_adjustment_factor = compute_learning_adjustment(feedback_history)
     recommended_price = apply_learning_adjustment(
@@ -56,6 +61,8 @@ def predict_hotel_price(db: Session, hotel_id: int) -> PricePredictionResponse |
         learning_adjustment_factor,
         len(feedback_history),
     )
+
+    # Persist the generated recommendation so later feedback can learn from it.
     recommendation = create_pricing_recommendation(
         db,
         hotel_id=hotel.hotel_id,
@@ -90,6 +97,7 @@ def get_hotel_recommendations(
     db: Session,
     hotel_id: int,
 ) -> list[PricingRecommendationResponse] | None:
+    """Return saved recommendation history after confirming the hotel exists."""
     if get_hotel_pricing_input(db, hotel_id) is None:
         return None
     return [
@@ -99,6 +107,7 @@ def get_hotel_recommendations(
 
 
 def get_pricing_decision(recommended_price: float, base_price: float) -> str:
+    """Translate the price delta into an operator-friendly action label."""
     if recommended_price > base_price * 1.02:
         return "raise_price"
     if recommended_price < base_price * 0.98:
@@ -116,6 +125,7 @@ def build_pricing_reason(
     learning_adjustment_factor: float,
     feedback_count: int,
 ) -> str:
+    """Create an auditable explanation string for the recommendation record."""
     parts = [
         f"decision={decision}",
         f"base_price={base_price:.2f}",

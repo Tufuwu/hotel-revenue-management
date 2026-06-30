@@ -20,6 +20,7 @@ def get_hotel_competitors(
     db: Session,
     hotel_id: int,
 ) -> list[CompetitorHotelResponse] | None:
+    """Return competitors for a hotel, or None when the hotel is unknown."""
     competitors = list_competitor_hotels(db, hotel_id)
     if competitors is None:
         return None
@@ -31,6 +32,7 @@ def register_competitor_hotel(
     hotel_id: int,
     payload: CompetitorHotelRequest,
 ) -> CompetitorHotelResponse | None:
+    """Register a nearby competitor that is relevant to local pricing."""
     pricing_input = get_hotel_pricing_input(db, hotel_id)
     if pricing_input is None:
         return None
@@ -63,6 +65,7 @@ def record_competitor_rate_snapshot(
     competitor_hotel_id: int,
     payload: CompetitorRateSnapshotRequest,
 ) -> CompetitorRateSnapshotResponse | None:
+    """Store one observed competitor rate used by future price predictions."""
     snapshot = create_competitor_rate_snapshot(
         db,
         competitor_hotel_id=competitor_hotel_id,
@@ -81,6 +84,7 @@ def calculate_distance_km(
     to_latitude: float,
     to_longitude: float,
 ) -> float:
+    """Calculate great-circle distance between two latitude/longitude points."""
     earth_radius_km = 6371.0
     lat_delta = radians(to_latitude - from_latitude)
     lon_delta = radians(to_longitude - from_longitude)

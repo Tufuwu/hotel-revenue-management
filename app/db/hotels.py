@@ -6,6 +6,7 @@ from app.db.serializers import get_latest_snapshot
 
 
 def list_hotels(session: Session) -> list[dict]:
+    """List hotel records with only the fields needed by service workflows."""
     hotels = session.scalars(select(Hotel).order_by(Hotel.id)).all()
     return [
         {
@@ -21,6 +22,7 @@ def list_hotels(session: Session) -> list[dict]:
 
 
 def get_hotel_pricing_input(session: Session, hotel_id: int) -> dict | None:
+    """Load all inputs needed to price a hotel in a single query workflow."""
     hotel = session.scalar(
         select(Hotel)
         .options(
@@ -34,6 +36,7 @@ def get_hotel_pricing_input(session: Session, hotel_id: int) -> dict | None:
     if hotel is None:
         return None
 
+    # Use the latest rate from nearby competitors, ordered by distance.
     competitor_prices = [
         latest_snapshot.price
         for competitor in sorted(

@@ -242,7 +242,6 @@ app/
     recommendations.py       推荐记录写入查询
     feedback.py              反馈记录写入查询
     serializers.py           ORM 对象转 dict
-    database.py              兼容旧导入的数据库聚合层
     model.py                 SQLAlchemy ORM 模型
     seed.py                  示例数据生成
     session.py               SQLite 连接和会话
@@ -254,7 +253,6 @@ app/
     recommendations.py       推荐价格和推荐记录模型
     feedback.py              反馈模型
     demo.py                  演示闭环模型
-    pricing.py               兼容旧导入的模型聚合层
   services/
     hotels.py                酒店、经营指标和价格约束服务
     recommendations.py       定价推荐服务
@@ -262,7 +260,6 @@ app/
     feedback.py              反馈记录服务
     learning.py              学习调整逻辑
     demo.py                  演示闭环服务
-    pricing_service.py       兼容旧导入的服务聚合层
 scripts/
   init_db.py                 初始化或重置数据库
   run_demo.py                同时启动 API 和 Streamlit
